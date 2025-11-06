@@ -15,7 +15,7 @@ from helper_funcs.helper import clean_the_string, get_time_now, time_human_reada
 
 # Retrieve Single PubSub tokens of the Azure Container App Job Instance OMG
 @app.function_name(name="getTokenPubSub")
-@app.route(route="getTokenPubSub")
+@app.route(route="getTokenPubSub",auth_level=func.AuthLevel.ANONYMOUS)
 def getTokenPubSub(req: func.HttpRequest) -> func.HttpResponse:
     try:
         req_body = req.get_json()
@@ -48,7 +48,7 @@ def getTokenPubSub(req: func.HttpRequest) -> func.HttpResponse:
     )
 
 @app.function_name(name="getBlobToken")
-@app.route(route="getBlobToken")
+@app.route(route="getBlobToken",auth_level=func.AuthLevel.ANONYMOUS)
 def getBlobToken(req:func.HttpRequest) -> func.HttpResponse:
     try:
         req_body = req.get_json()
@@ -162,7 +162,7 @@ async def processUploadedFile(blob_req: func.InputStream):
     
 
 @app.function_name(name="getQueries")
-@app.route(route="getQueries/{page?}", methods=["GET"])
+@app.route(route="getQueries/{page?}", methods=["GET"],auth_level=func.AuthLevel.ANONYMOUS)
 def getQueries(req:func.HttpRequest) -> func.HttpResponse:
     try:
         page = req.route_params.get('page', 1)
