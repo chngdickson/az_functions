@@ -119,10 +119,10 @@ async def processUploadedFile(blob_req: func.InputStream):
         instance_name, file_dict = clean_the_string(full_file_path)
         filename_new = file_dict["filename"]
         
+        logger.error("Running")
         # Delete previous uploaded images
         data_storage_manager = TableEntityManager()
         succeeded, rtn_dict = await data_storage_manager.onFileUploadedEvent(filename_new=filename_new)
-        
         if succeeded:
             # Get yo write tokens
             pubsub_mng = PubSubManager()
@@ -142,11 +142,16 @@ async def processUploadedFile(blob_req: func.InputStream):
                 "DBRoot":data_storage_manager.root_log_table_name
             }
             env_vars_merged = {**test_envs,**pubsub_vars, **rtn_dict}
+            file_sizeGB = rtn_dict["file_size_gb"]
+            # complete_config = container_obj.get_complete_execution_config("tph-app-job-aus-east-l2gdwab")
             
-            container_obj.run_docker_container(env_vars_merged)
+            res = container_obj.run_jobv2(file_sizeGB, env_dict=env_vars_merged)
+            logger.info(f"Successfully Run Container Jobs{res}")
+        else:
+            logger.warn("Container Jobs Not Running")
         # container_obj.run_job(instance_name, url_write_token, rtn_dict)
     except Exception as e:
-        print(f"Create Container Error: {e}")
+        logger.error(f"Create Container Error: {e}")
     
     # Get all the variables to run the job
     try:

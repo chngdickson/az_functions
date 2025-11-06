@@ -334,12 +334,14 @@ class TableEntityManager(object):
                         update_entity["process_expiretime"] = get_time_now(self.timeout_pubsub)
                         table_client.upsert_entity(mode=UpdateMode.MERGE, entity=update_entity)
                         
+                        
                         process_folder = update_entity["process_folder"]                    
                         key_val_to_copy = ["PartitionKey","RowKey","log_root","log_file",
                                         "process_folder","file_upload_full_path","ext"]
                         for key, value in update_entity.items():
                             if key in key_val_to_copy:
                                 rtn_dict[key] = value
+                        rtn_dict["file_size_gb"]=update_entity["file_size_gb"]
                     await self.delete_process_folder_on_pcd_upload(self.folder_container, process_folder)
                         
                     

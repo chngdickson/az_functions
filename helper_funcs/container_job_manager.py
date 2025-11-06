@@ -4,7 +4,7 @@ from azure.identity import DefaultAzureCredential
 from azure.mgmt.appcontainers import ContainerAppsAPIClient
 from azure.mgmt.appcontainers.models import RegistryCredentials, JobExecutionTemplate, Job, JobExecutionContainer, JobConfiguration, JobTemplate,JobConfigurationManualTriggerConfig, Container,ContainerResources
 from azure.core.exceptions import HttpResponseError
-
+from typing import Optional
 # az containerapp job show \
 #   --name tphcontainerjob \
 #   --resource-group testResourcev2
@@ -50,19 +50,19 @@ class CreateContainerAppsManager2:
         
         self.registry_name = os.getenv("RegistryName")
         self.registry_login_server = os.getenv("RegistryLoginServer")
-        self.registry_password = os.getenv("RegistryPassword")
-        self.registry_secret_ref = os.getenv("RegistrySecretRef")
+        self.registry_secret_ref = os.getenv("RegistryName")
         self.registry_secret_pw = os.getenv("RegistrySecretPw")
         self.registry_image_name = os.getenv("RegistryImageName")
         
-        self.container_job_name = os.getenv("ContainerJobName","tph-container-job")
+        self.containerInstanceName=os.getenv("ContainerInstanceName")
+        self.container_job_name = os.getenv("ContainerAppJobName")
         self.container_apps_managed_env_id = os.getenv("ContainerAppsManagedEnvID")
         
-        # self.sub_id = AzureResourceManager().sub_id
-        # self.seconds_to_expire = int(self.minutes_to_expire*60)
-        # self.client = ContainerAppsAPIClient(credential=DefaultAzureCredential(), subscription_id=self.sub_id)
+        self.sub_id = AzureResourceManager().sub_id
+        self.seconds_to_expire = int(self.minutes_to_expire*60)
+        self.client = ContainerAppsAPIClient(credential=DefaultAzureCredential(), subscription_id=self.sub_id)
         # self.job_params = self._init_job_params()
-        # response = self.client.jobs.begin_create_or_update(self.resource_group_name, self.container_job_name, self.job_params).result()
+    #     response = self.client.jobs.begin_create_or_update(self.resource_group_name, self.container_job_name, self.job_params).result()
     
     # def _init_job_params(self):
     #     job_parameters = {
@@ -96,7 +96,7 @@ class CreateContainerAppsManager2:
     #                 "containers": [
     #                     {
     #                         "image": f"{self.registry_login_server}/{self.registry_image_name}:latest",
-    #                         "name": "testname",
+    #                         "name": self.containerInstanceName,
     #                         "env": [
     #                             {"name":"PUBSUBGROUPNAME", "value":"groupcontainerxxxx"},
     #                             {"name":"PUBSUBURL", "value":"url_hello"}
@@ -107,7 +107,7 @@ class CreateContainerAppsManager2:
     #                             "ephemeralStorage": "16Gi"
     #                         },
     #                         "command": [
-    #                             "python", "main.py"
+    #                             "python3", "main2.py"
     #                         ]
     #                     }
     #                 ]
@@ -117,32 +117,60 @@ class CreateContainerAppsManager2:
     #     }
     #     return job_parameters
     
-    # def run_job(self, pubsub_groupname, pubsub_url, env_variable_to_parse:dict):
-    #     val = f"test-1"
-    #     job_execution_template = {
-    #         "containers" : [
-    #             {# You MUST pass the image, known azure bug.
-    #                 "image": f"{self.registry_login_server}/{self.registry_image_name}:latest", 
-    #                 "name": val, # This does not seem to work, it keeps the default name of the Job
-    #                 "env": [ # Can alter all env variables
-    #                     {"name": "PUBSUBGROUPNAME","value": pubsub_groupname},
-    #                     {"name":"PUBSUBURL", "value":pubsub_url}
-    #                     ],
-    #                 "resources": { #You can change this also
-    #                     "cpu": 0.5,
-    #                     "memory": "1Gi",
-    #                 },
-    #                 "command": [
-    #                     "python","main.py"
-    #                 ]
-    #             }
-    #         ]
-    #     }
-    #     # Execute the job
-    #     response = self.client.jobs.begin_start(resource_group_name=self.resource_group_name, job_name=self.container_job_name, template=job_execution_template).result()
-    #     print(f"Job execution started with ID: {response.id}")
         
 
+    def run_jobv2(self, pcd_filesize_in_GB, env_dict:Optional[dict]=None):
+        val = f"test-1"
+        ram = pcd_filesize_in_GB*2 if pcd_filesize_in_GB*2 > 10 else 10
+        ram = int(round(ram))
+        strg_size = pcd_filesize_in_GB*2.5 if pcd_filesize_in_GB*2 > 10 else 10
+        strg_size = int(round(strg_size))
+        try:
+            az_env_list_dict = []
+            if env_dict:
+                for k,v in env_dict.items():
+                    az_env_list_dict.append(
+                        {"name":k,"value":v}
+                    )
+            job_execution_template = {
+                "containers" : [
+                    {# You MUST pass the image, known azure bug.
+                        "image":  f"{self.registry_login_server}/{self.registry_image_name}:latest", 
+                        "name": "testgpucontainer", # This does not seem to work, it keeps the default name of the Job
+                        "env": az_env_list_dict,
+                        "resources": { #You can change this also
+                            "cpu": 6,
+                            "memory": f"{ram}Gi",
+                            "ephemeralStorage": f"{strg_size}Gi"
+                        },
+                        "command": [
+                            "python3","main2.py"
+                        ]
+                    }
+                ]
+            }
+            
+            result = self.client.jobs.begin_start(
+                resource_group_name=self.resource_group_name, 
+                job_name = self.container_job_name, 
+                template=job_execution_template).result()
+            print(f"Job execution started with ID: {result.id}")
+        except Exception as e:
+            print(e)
+        return result
+    
+    def get_job(self):
+        client = ContainerAppsAPIClient(
+            credential=DefaultAzureCredential(),
+            subscription_id=self.sub_id,
+        )
+
+        response = client.jobs.get(
+            resource_group_name=self.resource_group_name,
+            job_name=self.container_job_name
+        ) 
+        return response
+    
     def run_docker_container(self, env_vars=None):
         # Do NOT ADD Commands. Azure don't like that.
         import subprocess
