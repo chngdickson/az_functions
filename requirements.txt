@@ -3,15 +3,15 @@
 # azure-monitor-opentelemetry 
 
 azure-functions
-azure-functions
 azure-identity
 azure-mgmt-storage
+azure-data-tables
 azure-mgmt-resource
-azure-mgmt-monitor
-azure-mgmt-compute 
-azure-mgmt-containerregistry
-azure-mgmt-containerinstance
 azure-storage-blob
 azure-messaging-webpubsubclient
 azure-messaging-webpubsubservice
 azure-mgmt-appcontainers
+pytz
+aiohttp
+python-dotenv
+azurefunctions-extensions-bindings-blob
