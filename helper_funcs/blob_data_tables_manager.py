@@ -9,8 +9,11 @@ from azure.data.tables import TableClient, TableServiceClient, UpdateMode
 from azure.storage.blob import BlobServiceClient, generate_blob_sas, generate_container_sas, BlobSasPermissions, ContainerSasPermissions
 from azure.core.exceptions import ResourceNotFoundError, ResourceModifiedError
 from .helper import get_time_now, clean_the_string, process_expired
-from typing import Tuple
+from typing import Tuple, Optional
 import random
+import logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 """
 My frontend does not need to communicate with the Database Table Storage
 Frontend tells function app - I want to Upload to the Cloud
@@ -75,7 +78,7 @@ class RootDataTable(TypedDict, total=False):
     ext: str                    # File Extension
     file_size_gb: float         # X GB
     file_upload_full_path: str  # Blob pcdUploads/filename.laz
-    process_folder:str          # Blob processed/foldername
+    process_folder:Optional[str]          # Blob processed/foldername
     log_root: str               # Blob logs/log_root.csv
     log_file: str               # Blob logs/log_filename.csv 
     upload_completed:str        # [True, False]             
@@ -120,7 +123,7 @@ class Blob_Manager():
         if read_only:
             perm = BlobSasPermissions(read=True)
         else:
-            perm = BlobSasPermissions(write=True, create=True, add=True)
+            perm = BlobSasPermissions(write=True, create=True, add=True, delete=True)
         try:
             container_name = self.container_name
             primary_endpoint = self.blob_primary_endpoint
@@ -194,7 +197,7 @@ class TableEntityManager(object):
     def init_blob_manager(self):
         return Blob_Manager(self.connection_string, self.folder_container, self.timeout_blob)
     
-    def add_new_partition(self, full_file_path:str, file_size_gb:float):
+    def add_new_partition(self, full_file_path:str, file_size_gb:float)-> Tuple[bool, RootDataTable]:
         """
 
         Args:
@@ -240,10 +243,10 @@ class TableEntityManager(object):
                     "trees_completed": 0                         # [Number of Trees]
                 }
                 table_client.create_entity(entity=root_init_dict)
-            return True
+            return True, root_init_dict
         except Exception as e:
             print(f"Error occured in [add_new_partition] {e}")
-            return False
+            return False, {}
     ####========================================================= ###
     ####================= END: Init ============================= ###
     ####========================================================= ###
@@ -260,7 +263,7 @@ class TableEntityManager(object):
         pcd_upload_path = f"{self.folder_uploads}/{filename_new}{filename_ext}"
         return self.blob_obj.generate_sas_file_token(pcd_upload_path, read_only=False)
         
-    def can_upload(self, full_file_path:str, file_size_gigabytes:float):
+    async def can_upload(self, full_file_path:str, file_size_gigabytes:float)-> Tuple[bool, RootDataTable]:
         """If it's possible to upload, add a partition and sends True
 
         Args:
@@ -271,6 +274,7 @@ class TableEntityManager(object):
             _type_: _description_
         """
         try:
+            logger.warning(f"[can_upload started")
             instance_name, file_dict = clean_the_string(full_file_path)
             filename_new = file_dict["filename"]
             permission_to_upload = False
@@ -279,12 +283,16 @@ class TableEntityManager(object):
             else:
                 permission_to_upload = True
                 self.update_replace_upon_upload(filename_new)
-                self.add_new_partition(full_file_path, file_size_gigabytes)
                 
-            return permission_to_upload
+                added_partition, tableDict = self.add_new_partition(full_file_path, file_size_gigabytes)
+                
+                if not added_partition:
+                    permission_to_upload = False
+                logger.warning(f"[can_upload {permission_to_upload}")
+            return permission_to_upload, tableDict
         except Exception as e:
-            print(f"Error occured in [can_upload], {e}")
-            return permission_to_upload 
+            logger.error(f"Error occured in [can_upload], {e}")
+            return permission_to_upload, {}
     
     def update_replace_upon_upload(self, filename_new:str):
         try:
@@ -371,12 +379,27 @@ class TableEntityManager(object):
                         deletingBlobs.append(blob_client.delete_blob(blob.name, delete_snapshots="include"))
             await asyncio.gather(*deletingBlobs)
             await blob_service.close()
+            logger.warning(f"deleted Blobs Successfully")
             return True
             
         except Exception as e:
-            print(f"Error occured in [delete_process_folder_on_pcd_upload], [{e}]")
+            logger.error(f"Error occured in [delete_process_folder_on_pcd_upload], [{e}]")
             return False
-            
+    
+    async def delete_file_on_pcd_upload(self, primary_endpoint, sas_token, container_name, blob_name):
+        try:
+            blob_service = BlobServiceClient.from_connection_string(self.connection_string)
+            blob_client = blob_service.get_blob_client(
+                container=container_name,
+                blob=blob_name
+            )
+            blob_client.delete_blob(delete_snapshots="include")
+            logger.warning(f"Successfully deleted File on pcd_upload")
+            return True
+        except Exception as e:
+            logger.error(f"Delete failed: {e}")
+            return False
+        
     def process_is_running(self, filename_new)-> bool:
         """if any process is still running, you're not allowed to upload
 

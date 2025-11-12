@@ -5,17 +5,19 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 import azure.functions as func
 import azurefunctions.extensions.bindings.blob as blob
-app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
+# app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
+app = func.FunctionApp(http_auth_level=func.AuthLevel.FUNCTION)
 
 from helper_funcs.container_job_manager import CreateContainerAppsManager2
-from helper_funcs.blob_data_tables_manager import RootDataTable, TableEntityManager
+from helper_funcs.blob_data_tables_manager import TableEntityManager
 from helper_funcs.pubsub_manager import PubSubManager
 from helper_funcs.helper import clean_the_string, get_time_now, time_human_readable
-
+ACA_JOBS = CreateContainerAppsManager2()
+ACA_JOBS._init_job_params()
 
 # Retrieve Single PubSub tokens of the Azure Container App Job Instance OMG
 @app.function_name(name="getTokenPubSub")
-@app.route(route="getTokenPubSub",auth_level=func.AuthLevel.ANONYMOUS)
+@app.route(route="getTokenPubSub")
 def getTokenPubSub(req: func.HttpRequest) -> func.HttpResponse:
     try:
         req_body = req.get_json()
@@ -48,53 +50,79 @@ def getTokenPubSub(req: func.HttpRequest) -> func.HttpResponse:
     )
 
 @app.function_name(name="getBlobToken")
-@app.route(route="getBlobToken",auth_level=func.AuthLevel.ANONYMOUS)
-def getBlobToken(req:func.HttpRequest) -> func.HttpResponse:
+@app.route(route="getBlobToken")
+async def getBlobToken(req:func.HttpRequest) -> func.HttpResponse:
     try:
+        logger.warning(f"getBlobToken started")
         req_body = req.get_json()
         full_file_path = req_body.get('filename')
         gigabytes = req_body.get('filesizeInGB')
         data_storage_manager = TableEntityManager()
         data_storage_manager.upload_file_infos(full_file_path)
         
-        if data_storage_manager.can_upload(full_file_path, gigabytes):
+        
+        can_upload, db_init_dict = await data_storage_manager.can_upload(full_file_path, gigabytes)
+        if can_upload:
             primary_endpoint, sas_token, container_name, blob_name = data_storage_manager.upload_file_infos(full_file_path)
-            status_code = 200
-            result = {
-                "status": "success",
-                "primary_endpoint": primary_endpoint,
-                "sas_token": sas_token,
-                "container_name": container_name,
-                "blob_name": blob_name,
-                "message" : "Here is your token"
-            }
+            data_storage_manager.delete_file_on_pcd_upload(primary_endpoint, sas_token, container_name, blob_name)
+            # Start Container
+            ACA_Manager = CreateContainerAppsManager2()
+            if ACA_Manager.acaJobsStarted(PubSubManager(), data_storage_manager, full_file_path, db_init_dict):
+                logger.warning("ACA JOBS STARTED SUCCESSFULLY")
+                
+                # Delete File on Upload
+                logger.warning("Deleting Files On Upload")
+                await data_storage_manager.delete_process_folder_on_pcd_upload(data_storage_manager.folder_container, db_init_dict["process_folder"])
+                logger.warning("Deleting Files Completed")
+                
+                status_code = 200
+                result = {
+                    "status": "success",
+                    "primary_endpoint": primary_endpoint,
+                    "sas_token": sas_token,
+                    "container_name": container_name,
+                    "blob_name": blob_name,
+                    "message" : "Here is your token"
+                }
+            else:
+                logger.error("ACA JOBS Did not Start")
+                result = {
+                    "status": "unsuccessful",
+                    "primary_endpoint": "url",
+                    "sas_token": "",
+                    "container_name": "",
+                    "blob_name": "",
+                    "message" : f"Not really an error, \nACA Jobs Can't Start"
+                }
+
         else:
             status_code = 503
             result = {
-            "status": "unsuccessful",
-            "upload_url": "url",
-            "sas_token": "",
-            "container_name": "",
-            "blob_name": "",
-            "message" : f"Not really an error, \nthis exact filename is currently being processed"
+                "status": "unsuccessful",
+                "primary_endpoint": "url",
+                "sas_token": "",
+                "container_name": "",
+                "blob_name": "",
+                "message" : f"Can't Upload, the same file {full_file_path} is already in process"
             }
     except Exception as e:
         status_code = 503
         result = {
             "status": "unsuccessful",
-            "upload_url": "url",
+            "primary_endpoint": "url",
             "sas_token": "",
             "container_name": "",
             "blob_name": "",
             "message" : f"Encountered Error with Uploading {e}"
         }
-        print(f"error at getblobtoken, error:[{e}]")
+        logger.error(f"error at getblobtoken, error:[{e}]")
     return func.HttpResponse(
         json.dumps(result),
         status_code=status_code,
         mimetype="application/json"
     )
 
+    
 # Process Uploaded message from Blob Container
 @app.function_name(name="processUploadedFile")
 @app.blob_trigger(
@@ -123,46 +151,39 @@ async def processUploadedFile(blob_req: func.InputStream):
         # Delete previous uploaded images
         data_storage_manager = TableEntityManager()
         succeeded, rtn_dict = await data_storage_manager.onFileUploadedEvent(filename_new=filename_new)
-        if succeeded:
-            # Get yo write tokens
-            pubsub_mng = PubSubManager()
-            url_write_token = pubsub_mng._get_write_token(instance_name)
+        # if succeeded:
+        #     # Get yo write tokens
+        #     pubsub_mng = PubSubManager()
+        #     url_write_token = pubsub_mng._get_write_token(instance_name)
             
-            # Instantiate Containers
-            container_obj = CreateContainerAppsManager2()
-            pubsub_vars = {
-                "PUBSUBGROUPNAME":instance_name,
-                "PUBSUBURL": url_write_token
-            }
-            test_envs = {
-                "StorageAccName": data_storage_manager.strg_account_name,
-                "StorageAccKey": data_storage_manager.strg_access_key,
-                "StorageEndpointSuffix" : data_storage_manager.strg_endpoint_suffix,
-                "StorageContainer": data_storage_manager.folder_container,
-                "DBRoot":data_storage_manager.root_log_table_name
-            }
-            env_vars_merged = {**test_envs,**pubsub_vars, **rtn_dict}
-            file_sizeGB = rtn_dict["file_size_gb"]
-            # complete_config = container_obj.get_complete_execution_config("tph-app-job-aus-east-l2gdwab")
+        #     # Instantiate Containers
+        #     container_obj = CreateContainerAppsManager2()
+        #     pubsub_vars = {
+        #         "PUBSUBGROUPNAME":instance_name,
+        #         "PUBSUBURL": url_write_token
+        #     }
+        #     test_envs = {
+        #         "StorageAccName": data_storage_manager.strg_account_name,
+        #         "StorageAccKey": data_storage_manager.strg_access_key,
+        #         "StorageEndpointSuffix" : data_storage_manager.strg_endpoint_suffix,
+        #         "StorageContainer": data_storage_manager.folder_container,
+        #         "DBRoot":data_storage_manager.root_log_table_name
+        #     }
+        #     env_vars_merged = {**test_envs,**pubsub_vars, **rtn_dict}
+        #     file_sizeGB = rtn_dict["file_size_gb"]
+        #     # complete_config = container_obj.get_complete_execution_config("tph-app-job-aus-east-l2gdwab")
             
-            res = container_obj.run_jobv2(file_sizeGB, env_dict=env_vars_merged)
-            logger.info(f"Successfully Run Container Jobs{res}")
-        else:
-            logger.warn("Container Jobs Not Running")
+        #     # res = container_obj.run_jobv2(file_sizeGB, env_dict=env_vars_merged)
+        #     logger.info(f"Successfully Run Container Jobs{res}")
+        # else:
+        #     logger.warn("Container Jobs Not Running")
         # container_obj.run_job(instance_name, url_write_token, rtn_dict)
     except Exception as e:
         logger.error(f"Create Container Error: {e}")
     
-    # Get all the variables to run the job
-    try:
-        data_storage_manager = TableEntityManager()
-        
-    except Exception as e:
-        pass
-    
 
 @app.function_name(name="getQueries")
-@app.route(route="getQueries/{page?}", methods=["GET"],auth_level=func.AuthLevel.ANONYMOUS)
+@app.route(route="getQueries/{page?}", methods=["GET"])
 def getQueries(req:func.HttpRequest) -> func.HttpResponse:
     try:
         page = req.route_params.get('page', 1)
@@ -172,7 +193,7 @@ def getQueries(req:func.HttpRequest) -> func.HttpResponse:
         items_data = []
         data_storage_manager = TableEntityManager()
         data_list = data_storage_manager.query_db()
-        logger.warn(data_list)
+        # logger.warn(data_list)
         n_data = len(data_list)
         
         # Pagination
@@ -185,7 +206,7 @@ def getQueries(req:func.HttpRequest) -> func.HttpResponse:
         end_index = max(0, end_index)
         current_page_items = data_list
         
-        logger.warn(f"{start_index}, {end_index}")
+        logger.warning(f"{start_index}, {end_index}")
         # [id, filename, coordinates, processed_url, status, logs_url, date, size]
         for i in range(end_index, start_index, -1):
             current_data = current_page_items[str(i-1)]
@@ -207,8 +228,9 @@ def getQueries(req:func.HttpRequest) -> func.HttpResponse:
                 primary_endpoint, sas_token, container_name = data_storage_manager.blob_obj.generate_sas_Container_token(read_only=True)
             else:
                 sasUrlsSide, sasUrlTop = [], ""
-                logger.warn(f"{current_data['error']}, {bool(current_data['replaced'])}, {current_data['completed']}")
+                logger.debug(f"{current_data['error']}, {bool(current_data['replaced'])}, {current_data['completed']}")
                 primary_endpoint, sas_token, container_name = "","",""
+            logger.warning(f"{current_data['error']}, {current_data['replaced']}, {current_data['completed']}, Error : [{current_data['error_msg']}]")
             ## Ensure ALL VALUES ARE POPULATED
             items_data.append({
                 "id"            : str(i),
@@ -286,7 +308,7 @@ def getDownloadBlobToken(req:func.HttpRequest) -> func.HttpResponse:
             "container_name": "",
             "message" : f"Encountered Error with Uploading {e}"
         }
-        print(f"error at getblobtoken, error:[{e}]")
+        logger.error(f"error at getblobtoken, error:[{e}]")
     return func.HttpResponse(
         json.dumps(result),
         status_code=status_code,
