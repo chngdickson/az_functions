@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+from pathlib import Path
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 import azure.functions as func
@@ -64,7 +65,7 @@ async def getBlobToken(req:func.HttpRequest) -> func.HttpResponse:
         can_upload, db_init_dict = await data_storage_manager.can_upload(full_file_path, gigabytes)
         if can_upload:
             primary_endpoint, sas_token, container_name, blob_name = data_storage_manager.upload_file_infos(full_file_path)
-            data_storage_manager.delete_file_on_pcd_upload(primary_endpoint, sas_token, container_name, blob_name)
+            await data_storage_manager.delete_file_on_pcd_upload(primary_endpoint, sas_token, container_name, blob_name)
             # Start Container
             ACA_Manager = CreateContainerAppsManager2()
             if ACA_Manager.acaJobsStarted(PubSubManager(), data_storage_manager, full_file_path, db_init_dict):
@@ -72,8 +73,8 @@ async def getBlobToken(req:func.HttpRequest) -> func.HttpResponse:
                 
                 # Delete File on Upload
                 logger.warning("Deleting Files On Upload")
-                await data_storage_manager.delete_process_folder_on_pcd_upload(data_storage_manager.folder_container, db_init_dict["process_folder"])
-                logger.warning("Deleting Files Completed")
+                # await data_storage_manager.delete_process_folder_on_pcd_upload(data_storage_manager.folder_container, db_init_dict["process_folder"])
+                # logger.warning("Deleting Files Completed")
                 
                 status_code = 200
                 result = {
@@ -288,15 +289,19 @@ def getQueries(req:func.HttpRequest) -> func.HttpResponse:
 @app.route(route="getDownloadBlobToken")
 def getDownloadBlobToken(req:func.HttpRequest) -> func.HttpResponse:
     try:
+        req_body = req.get_json()
+        processed_url = req_body.get('processed_url')
+        filename = req_body.get('filename')
+
         data_storage_manager = TableEntityManager()
 
-        primary_endpoint, sas_token, container_name = data_storage_manager.blob_obj.generate_sas_Container_token(read_only=True)
+        # primary_endpoint, sas_token, container_name = data_storage_manager.blob_obj.generate_sas_Container_token(read_only=True)
+        location = os.path.join(processed_url,f"{Path(processed_url).stem}.zip")
+        sas_url = data_storage_manager.generate_sas_url_for_blob(location)
         status_code = 200
         result = {
             "status": "success",
-            "primary_endpoint": primary_endpoint,
-            "sas_token": sas_token,
-            "container_name": container_name,
+            "sas_token": sas_url,
             "message" : "Here is your token"
         }
     except Exception as e:

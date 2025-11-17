@@ -58,6 +58,7 @@ class CreateContainerAppsManager2:
         self.registry_secret_ref = os.getenv("RegistryName")
         self.registry_secret_pw = os.getenv("RegistrySecretPw")
         self.registry_image_name = os.getenv("RegistryImageName")
+        self.local_registry_image_name = os.getenv("RegistryImageLocalName")
         
         self.containerInstanceName=os.getenv("ContainerInstanceName")
         self.container_job_name = os.getenv("ContainerAppJobName")
@@ -166,7 +167,7 @@ class CreateContainerAppsManager2:
         """ # On Server only
         "-p","100:8080",
         """
-        image_name = self.registry_image_name
+        image_name = self.local_registry_image_name
         cmd = ["docker", "run", "-it","--rm", "--privileged",
             "--net=host","--gpus","all"]
         
@@ -222,63 +223,66 @@ class CreateContainerAppsManager2:
         return job_success
 
     def _init_job_params(self):
-        job_parameters = {
-            "location": self.location, # Change your location
-            "properties": {
-                "environmentId": self.container_apps_managed_env_id,
-                "workloadProfileName": "NC8as-T4",
-                "configuration": {
-                    "secrets": [
-                        {
-                            "name": self.registry_secret_ref, # Storing my registry password
-                            "value": self.registry_secret_pw
-                        }
-                    ],
-                    "triggerType": "Manual",
-                    "replicaTimeout": self.seconds_to_expire,
-                    "replicaRetryLimit": 0,
-                    "manualTriggerConfig": {
-                        "replicaCompletionCount": 1,
-                        "parallelism": 1,
-                        "scale": {
-                            "minExecutions": 0,
-                            "maxExecutions": 100,
-                            "pollingInterval": 30,
-                        }
-                    },
-                    "registries": [
-                        {
-                            "server": self.registry_login_server,
-                            "username": self.registry_name,
-                            "passwordSecretRef": self.registry_secret_ref,
+        try:
+            job_parameters = {
+                "location": self.location, # Change your location
+                "properties": {
+                    "environmentId": self.container_apps_managed_env_id,
+                    "workloadProfileName": "NC8as-T4",
+                    "configuration": {
+                        "secrets": [
+                            {
+                                "name": self.registry_secret_ref, # Storing my registry password
+                                "value": self.registry_secret_pw
+                            }
+                        ],
+                        "triggerType": "Manual",
+                        "replicaTimeout": self.seconds_to_expire,
+                        "replicaRetryLimit": 0,
+                        "manualTriggerConfig": {
+                            "replicaCompletionCount": 1,
+                            "parallelism": 1,
+                            "scale": {
+                                "minExecutions": 0,
+                                "maxExecutions": 100,
+                                "pollingInterval": 30,
+                            }
                         },
-                    ]
-                },
-                "template": {
-                    "containers": [
-                        {
-                            "image": f"{self.registry_login_server}/{self.registry_image_name}:latest",
-                            "name": self.containerInstanceName,
-                            "env": [
-                                {"name":"PUBSUBGROUPNAME", "value":"groupcontainerxxxx"},
-                                {"name":"PUBSUBURL", "value":"url_hello"}
-                            ],
-                            "resources": {
-                                "cpu": 0.25,
-                                "memory": "0.5Gi",
-                                "ephemeralStorage": "16Gi"
+                        "registries": [
+                            {
+                                "server": self.registry_login_server,
+                                "username": self.registry_name,
+                                "passwordSecretRef": self.registry_secret_ref,
                             },
-                            "command": [
-                                "python3", "main2.py"
-                            ]
-                        }
-                    ]
-                },
-                
+                        ]
+                    },
+                    "template": {
+                        "containers": [
+                            {
+                                "image": f"{self.registry_login_server}/{self.registry_image_name}:latest",
+                                "name": self.containerInstanceName,
+                                "env": [
+                                    {"name":"PUBSUBGROUPNAME", "value":"groupcontainerxxxx"},
+                                    {"name":"PUBSUBURL", "value":"url_hello"}
+                                ],
+                                "resources": {
+                                    "cpu": 0.25,
+                                    "memory": "0.5Gi",
+                                    "ephemeralStorage": "16Gi"
+                                },
+                                "command": [
+                                    "python3", "main2.py"
+                                ]
+                            }
+                        ]
+                    },
+                    
+                }
             }
-        }
-        response = self.client.jobs.begin_create_or_update(
-            resource_group_name=self.resource_group_name, 
-            job_name=self.container_job_name, 
-            job_envelope=job_parameters).result()    
-        logger.warning(response)
+            response = self.client.jobs.begin_create_or_update(
+                resource_group_name=self.resource_group_name, 
+                job_name=self.container_job_name, 
+                job_envelope=job_parameters).result()    
+            logger.warning(response)
+        except Exception as e:
+            return

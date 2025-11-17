@@ -2,6 +2,7 @@ import os
 import asyncio 
 from uuid import uuid4, UUID
 from copy import copy
+from pathlib import Path
 from datetime import datetime,timezone, timedelta
 from dotenv import find_dotenv, load_dotenv
 from typing_extensions import TypedDict
@@ -497,8 +498,12 @@ class TableEntityManager(object):
             topViewPaths   = [blob.name for blob in blobContainerClient.list_blobs(folder_topView)]
             for im_loc in sideViewPaths:
                 sasUrlsSide.append(self.generate_sas_url_for_blob(im_loc))
-            
+                logger.warning(f"{im_loc}")
             sasUrlTop = self.generate_sas_url_for_blob(topViewPaths[0])
+            
+            zip_file_loc = os.path.join(process_folder,f"{Path(process_folder).stem}.zip")
+            logger.warning(f"zip_file Loc : {zip_file_loc}")
+            sasUrlZip = self.generate_sas_url_for_blob(zip_file_loc)
         except Exception as e:
             # raise IOError("Received IO error when querying Images")
             return sasUrlsSide, sasUrlTop
