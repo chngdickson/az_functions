@@ -124,7 +124,7 @@ class Blob_Manager():
         if read_only:
             perm = BlobSasPermissions(read=True)
         else:
-            perm = BlobSasPermissions(write=True, create=True, add=True, delete=True)
+            perm = BlobSasPermissions(read=True,write=True, create=True, add=True, delete=True, tag=True)
         try:
             container_name = self.container_name
             primary_endpoint = self.blob_primary_endpoint
@@ -180,7 +180,7 @@ class TableEntityManager(object):
         self.folder_uploads     = str(os.getenv("FolderUpload", "pointcloudUploads"))
         self.folder_processed   = str(os.getenv("FolderProcessed", "processed"))
         self.timeout_blob       = int(os.getenv("Timeout_Blob_mins", "10"))
-        self.timeout_pubsub     = int(os.getenv("PubSub_minutes_to_expire","10"))
+        self.timeout_pubsub     = int(os.getenv("Timeout_Blob_mins","10"))
         self.image_loc          = str(os.getenv("saveInSideView","sideView"))
         self.create_database_if_not_exists()
         self.blob_obj = self.init_blob_manager()
@@ -235,8 +235,8 @@ class TableEntityManager(object):
                     # Not initiated here
                     "coordinates":"X",
                     "upload_starttime": get_time_now(0),
-                    "process_starttime": "",                     # str in isoformat
-                    "process_expiretime": "",                    # str in isoformat
+                    "process_starttime": get_time_now(0),                     # str in isoformat
+                    "process_expiretime": get_time_now(self.timeout_pubsub),  # str in isoformat
                     "replaced": str(False),                           # [True, False]
                     "completed": str(False),                     # [True, False]        
                     "error": str(False),                         # [True, False]
@@ -320,7 +320,6 @@ class TableEntityManager(object):
     ####=========== Start : Event Process Functions ====================== ###
     ####================================================================== ###
     async def onFileUploadedEvent(self, filename_new):
-        # TODO: ERROR
         file_list = []
         rtn_dict = {}
         try:

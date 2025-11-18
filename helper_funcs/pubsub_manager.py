@@ -12,7 +12,7 @@ from azure.messaging.webpubsubclient.models import (
 
 class PubSubManager():
     def __init__(self):
-        self.minutes_to_expire = int(os.environ["PubSub_minutes_to_expire"])
+        self.minutes_to_expire = int(os.environ["Timeout_Blob_mins"])
         self.conn_str_pubsub = os.environ["ConnString_PubSub"]
         self.hubname = os.environ["PubSub_HubName"]
         self.service_client = WebPubSubServiceClient.from_connection_string( # type: ignore

@@ -49,7 +49,7 @@ from azure.mgmt.appcontainers import ContainerAppsAPIClient
 
 class CreateContainerAppsManager2:    
     def __init__(self):
-        self.minutes_to_expire = int(os.getenv("PubSub_minutes_to_expire", "10"))
+        self.minutes_to_expire = int(os.getenv("Timeout_Blob_mins", "10"))
         self.resource_group_name = os.getenv("ResourceGroupName","myResourceGroup")
         self.location = os.getenv("location","Australia East")
         
@@ -126,6 +126,7 @@ class CreateContainerAppsManager2:
         ram = int(round(ram))
         strg_size = pcd_filesize_in_GB*2.5 if pcd_filesize_in_GB*2 > 10 else 10
         strg_size = int(round(strg_size))
+        strg_size = int(16)
         try:
             az_env_list_dict = []
             if env_dict:
@@ -140,7 +141,7 @@ class CreateContainerAppsManager2:
                         "name": self.containerInstanceName, # This does not seem to work, it keeps the default name of the Job
                         "env": az_env_list_dict,
                         "resources": { #You can change this also
-                            "cpu": 6,
+                            "cpu": 8,
                             "memory": f"{ram}Gi",
                             "ephemeralStorage": f"{strg_size}Gi"
                         },
@@ -215,7 +216,7 @@ class CreateContainerAppsManager2:
             if key in var_needed:
                 db_dict[key] = value
         db_dict["file_size_gb"] = db_init_dict["file_size_gb"]
-        db_dict["DOWNLOAD_WAIT_TIME_MINS"] = int(round(int(os.getenv("PubSub_minutes_to_expire"))/2))
+        db_dict["DOWNLOAD_WAIT_TIME_MINS"] = int(round(int(os.getenv("Timeout_Blob_mins"))/2))
         
         env_vars_merged = {**pubsub_vars, **storage_vars, **db_dict}
 
