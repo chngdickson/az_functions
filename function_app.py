@@ -239,6 +239,7 @@ def getQueries(req:func.HttpRequest) -> func.HttpResponse:
                 "upload_loc"    : f"{current_data['file_upload_full_path']}",
                 "coordinates"   : f"{current_data['coordinates']}",
                 "processed_url" : f"{current_data['process_folder']}",
+                "csv_url"       : f"{current_data['process_folder']}",
                 "status"        : status.title(),
                 "logs_url"      : f"{current_data['log_file']}",
                 "date"          : current_data['upload_starttime'], #f"{time_human_readable(current_data['upload_starttime'])}",
@@ -291,26 +292,28 @@ def getDownloadBlobToken(req:func.HttpRequest) -> func.HttpResponse:
     try:
         req_body = req.get_json()
         processed_url = req_body.get('processed_url')
-        filename = req_body.get('filename')
-
+        # filename = req_body.get('filename')
+        filetype = req_body.get('filetype')
+        # print(filetype)
         data_storage_manager = TableEntityManager()
-
+        the_blob_name = f"{Path(processed_url).stem}.{filetype}"
         # primary_endpoint, sas_token, container_name = data_storage_manager.blob_obj.generate_sas_Container_token(read_only=True)
-        location = os.path.join(processed_url,f"{Path(processed_url).stem}.zip")
+        location = os.path.join(processed_url,the_blob_name)
+        filename = the_blob_name
         sas_url = data_storage_manager.generate_sas_url_for_blob(location)
         status_code = 200
         result = {
             "status": "success",
             "sas_token": sas_url,
+            "filename" : filename,
             "message" : "Here is your token"
         }
     except Exception as e:
         status_code = 503
         result = {
             "status": "unsuccessful",
-            "upload_url": "url",
             "sas_token": "",
-            "container_name": "",
+            "filename" : "",
             "message" : f"Encountered Error with Uploading {e}"
         }
         logger.error(f"error at getblobtoken, error:[{e}]")
