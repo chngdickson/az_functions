@@ -122,11 +122,12 @@ class CreateContainerAppsManager2:
             return self.run_ACA_JOBS(pcd_filesize_in_GB,env_dict)
             
     def run_ACA_JOBS(self, pcd_filesize_in_GB, env_dict:Optional[dict]=None)-> Tuple[bool, Optional[LROPoller]]:
-        ram = pcd_filesize_in_GB*2 if pcd_filesize_in_GB*2 > 10 else 10
-        ram = int(round(ram))
-        strg_size = pcd_filesize_in_GB*2.5 if pcd_filesize_in_GB*2 > 10 else 10
-        strg_size = int(round(strg_size))
-        strg_size = int(16)
+        size = 4 + pcd_filesize_in_GB*6
+        size = min(int(round(size)), 56)
+        # strg_size = pcd_filesize_in_GB*2.5 if pcd_filesize_in_GB*2 > 10 else 10
+        # strg_size = int(round(strg_size))
+        # strg_size = int(16)
+        ram = strg_size = size
         try:
             az_env_list_dict = []
             if env_dict:
@@ -267,14 +268,20 @@ class CreateContainerAppsManager2:
                                     {"name":"PUBSUBURL", "value":"url_hello"}
                                 ],
                                 "resources": {
-                                    "cpu": 0.25,
-                                    "memory": "0.5Gi",
+                                    "cpu": 8,
+                                    "memory": "10Gi",
                                     "ephemeralStorage": "16Gi"
                                 },
                                 "command": [
                                     "python3", "main2.py"
+                                ],
+                                "volumeMounts": [
+                                    {"mountPath": "/pcddata","volumeName": "pcddata"}
                                 ]
                             }
+                        ],
+                        "volumes": [
+                            {"name": "pcddata","storageType": "EmptyDir"}
                         ]
                     },
                     
