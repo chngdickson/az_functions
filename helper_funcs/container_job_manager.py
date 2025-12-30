@@ -122,7 +122,7 @@ class CreateContainerAppsManager2:
             return self.run_ACA_JOBS(pcd_filesize_in_GB,env_dict)
             
     def run_ACA_JOBS(self, pcd_filesize_in_GB, env_dict:Optional[dict]=None)-> Tuple[bool, Optional[LROPoller]]:
-        size = 4 + pcd_filesize_in_GB*6
+        size = 4 + pcd_filesize_in_GB*20
         size = min(int(round(size)), 56)
         # strg_size = pcd_filesize_in_GB*2.5 if pcd_filesize_in_GB*2 > 10 else 10
         # strg_size = int(round(strg_size))
