@@ -68,6 +68,7 @@ async def getBlobToken(req:func.HttpRequest) -> func.HttpResponse:
             await data_storage_manager.delete_file_on_pcd_upload(primary_endpoint, sas_token, container_name, blob_name)
             # Start Container
             ACA_Manager = CreateContainerAppsManager2()
+            ACA_Manager._init_job_params()
             if ACA_Manager.acaJobsStarted(PubSubManager(), data_storage_manager, full_file_path, db_init_dict):
                 logger.warning("ACA JOBS STARTED SUCCESSFULLY")
                 
@@ -122,66 +123,7 @@ async def getBlobToken(req:func.HttpRequest) -> func.HttpResponse:
         status_code=status_code,
         mimetype="application/json"
     )
-
-    
-# Process Uploaded message from Blob Container
-# @app.function_name(name="processUploadedFile")
-# @app.blob_trigger(
-#     arg_name="blob_req",
-#     direction="in",
-#     path="tph-files/pointcloudUploads/{name}.{blobextension}", 
-#     connection="ConnString_StoragePcd",
-#     fileName="@triggerBody().fileName"
-#     )
-# async def processUploadedFile(blob_req: func.InputStream):
-#     """ 
-#     When Files are Uploaded and Completed in Blob, it will add this file in.
-#         "filename" : filename,
-#         "file_extension" : file_extention,
-#         "full_path" : full_path
-#     """
-#     try:
-#         logger.info(f"Python blob trigger function Begin blob. "
-#                     f"Name: {blob_req.name}, "
-#                     f"Blob Size: {blob_req.length} bytes")
-#         full_file_path:str = blob_req.name
-#         instance_name, file_dict = clean_the_string(full_file_path)
-#         filename_new = file_dict["filename"]
-        
-#         logger.error("Running")
-#         # Delete previous uploaded images
-#         data_storage_manager = TableEntityManager()
-#         succeeded, rtn_dict = await data_storage_manager.onFileUploadedEvent(filename_new=filename_new)
-#         # if succeeded:
-#         #     # Get yo write tokens
-#         #     pubsub_mng = PubSubManager()
-#         #     url_write_token = pubsub_mng._get_write_token(instance_name)
-            
-#         #     # Instantiate Containers
-#         #     container_obj = CreateContainerAppsManager2()
-#         #     pubsub_vars = {
-#         #         "PUBSUBGROUPNAME":instance_name,
-#         #         "PUBSUBURL": url_write_token
-#         #     }
-#         #     test_envs = {
-#         #         "StorageAccName": data_storage_manager.strg_account_name,
-#         #         "StorageAccKey": data_storage_manager.strg_access_key,
-#         #         "StorageEndpointSuffix" : data_storage_manager.strg_endpoint_suffix,
-#         #         "StorageContainer": data_storage_manager.folder_container,
-#         #         "DBRoot":data_storage_manager.root_log_table_name
-#         #     }
-#         #     env_vars_merged = {**test_envs,**pubsub_vars, **rtn_dict}
-#         #     file_sizeGB = rtn_dict["file_size_gb"]
-#         #     # complete_config = container_obj.get_complete_execution_config("tph-app-job-aus-east-l2gdwab")
-            
-#         #     # res = container_obj.run_jobv2(file_sizeGB, env_dict=env_vars_merged)
-#         #     logger.info(f"Successfully Run Container Jobs{res}")
-#         # else:
-#         #     logger.warn("Container Jobs Not Running")
-#         # container_obj.run_job(instance_name, url_write_token, rtn_dict)
-#     except Exception as e:
-#         logger.error(f"Create Container Error: {e}")
-    
+ 
 
 @app.function_name(name="getQueries")
 @app.route(route="getQueries/{page?}", methods=["GET"])

@@ -49,7 +49,7 @@ from azure.mgmt.appcontainers import ContainerAppsAPIClient
 
 class CreateContainerAppsManager2:    
     def __init__(self):
-        self.minutes_to_expire = int(os.getenv("Timeout_Blob_mins", "10"))
+        self.minutes_to_expire = int(os.getenv("Timeout_Jobs_mins", "60"))
         self.resource_group_name = os.getenv("ResourceGroupName","myResourceGroup")
         self.location = os.getenv("location","Australia East")
         
@@ -287,10 +287,10 @@ class CreateContainerAppsManager2:
                     
                 }
             }
-            response = self.client.jobs.begin_create_or_update(
+            self.client.jobs.begin_create_or_update(
                 resource_group_name=self.resource_group_name, 
                 job_name=self.container_job_name, 
-                job_envelope=job_parameters).result()    
-            logger.warning(response)
+                job_envelope=job_parameters)#.result()    
+            # logger.warning(response)
         except Exception as e:
             return
