@@ -147,7 +147,7 @@ class CreateContainerAppsManager2:
                             "ephemeralStorage": f"{strg_size}Gi"
                         },
                         "command": [
-                            "python3","main2.py"
+                            "python3","main.py"
                         ]
                     }
                 ]
@@ -273,7 +273,7 @@ class CreateContainerAppsManager2:
                                     "ephemeralStorage": "16Gi"
                                 },
                                 "command": [
-                                    "python3", "main2.py"
+                                    "python3", "main.py"
                                 ],
                                 "volumeMounts": [
                                     {"mountPath": "/pcddata","volumeName": "pcddata"}
