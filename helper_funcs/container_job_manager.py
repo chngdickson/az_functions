@@ -217,7 +217,7 @@ class CreateContainerAppsManager2:
             if key in var_needed:
                 db_dict[key] = value
         db_dict["file_size_gb"] = db_init_dict["file_size_gb"]
-        db_dict["DOWNLOAD_WAIT_TIME_MINS"] = int(round(int(os.getenv("Timeout_Blob_mins"))/2))
+        db_dict["DOWNLOAD_WAIT_TIME_MINS"] = int(round(int(os.getenv("Timeout_Blob_mins"))+5))
         
         env_vars_merged = {**pubsub_vars, **storage_vars, **db_dict}
 
