@@ -154,14 +154,19 @@ def getQueries(req:func.HttpRequest) -> func.HttpResponse:
         for i in range(end_index, start_index, -1):
             current_data = current_page_items[str(i-1)]
             error = current_data["error"]
-            if error == "True"or error == True:
+            if error == "True" or error == True:
                 status = f"{current_data['status']} Error"
             else:
                 status = current_data["status"]
+                
+            if current_data["completed"] == 'True':
+                error = 'False'
+                status = current_data["status"]
+            
             processed_folder = f"{current_data['process_folder']}"
             
             # IF Completed Generate Images
-            if ((current_data["error"]     == 'False'  or current_data["error"] == False ) and \
+            if ((error == 'False' or error == False ) and \
                 (current_data["replaced"]  == 'False' or current_data["replaced"] == False )and \
                 current_data["completed"] == 'True'
                 ):
